@@ -1,0 +1,19 @@
+[Unit]
+Description=trakt-to-letterboxd sync service
+After=network.target
+
+[Service]
+Type=simple
+# ── EDIT THESE TWO LINES ──────────────────────────────
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/trakt-to-letterboxd
+# ─────────────────────────────────────────────────────
+ExecStart=/home/YOUR_USERNAME/trakt-to-letterboxd/venv/bin/python app.py
+Environment=PORT=8888
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

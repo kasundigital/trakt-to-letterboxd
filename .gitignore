@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# App data — never commit these
+logs/config.json
+logs/state.json
+logs/history.json
+logs/movies.json
+output/
+
+# Debug screenshots
+*.png
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Editor
+.vscode/
+.idea/
+*.swp

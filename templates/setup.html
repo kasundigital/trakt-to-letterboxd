@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup — trakt-to-letterboxd</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07070f;--s1:#0e0e1c;--s2:#131325;--border:#1e1e35;
+  --accent:#5b5ef4;--trakt:#ed1c24;--lb:#00c030;
+  --text:#e2e2f0;--muted:#5a5a78;--muted2:#8888aa;
+  --success:#00c030;--warn:#f59e0b;--error:#ef4444;
+}
+body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;overflow-x:hidden}
+
+/* Background */
+.bg-dots{position:fixed;inset:0;background-image:radial-gradient(circle,rgba(91,94,244,0.08) 1px,transparent 1px);background-size:32px 32px;pointer-events:none}
+.bg-glow{position:fixed;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(91,94,244,0.06) 0%,transparent 65%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+
+/* Header */
+.wizard-header{text-align:center;margin-bottom:40px;animation:fadeDown 0.5s ease}
+.wizard-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+.badge{padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.badge-trakt{background:var(--trakt);color:#fff}
+.badge-lb{background:var(--lb);color:#000}
+.logo-arrow{color:var(--muted);font-size:18px}
+.wizard-title{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;margin-bottom:8px}
+.wizard-sub{font-size:12px;color:var(--muted2)}
+
+/* Steps indicator */
+.steps-indicator{display:flex;align-items:center;gap:0;margin-bottom:36px;animation:fadeDown 0.5s ease 0.1s both}
+.step-dot{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--muted);transition:all 0.3s;flex-shrink:0;background:var(--s1)}
+.step-dot.active{border-color:var(--accent);color:var(--accent);background:rgba(91,94,244,0.1)}
+.step-dot.done{border-color:var(--success);color:var(--bg);background:var(--success)}
+.step-line{flex:1;height:2px;background:var(--border);transition:background 0.3s;min-width:32px}
+.step-line.done{background:var(--success)}
+.step-label{font-size:9px;color:var(--muted2);text-align:center;margin-top:6px;text-transform:uppercase;letter-spacing:1px}
+
+/* Steps wrapper */
+.steps-wrap{display:flex;align-items:flex-start;gap:0}
+.steps-labels{display:flex;align-items:center;gap:0;margin-bottom:36px;width:100%}
+
+/* Card */
+.wizard-card{background:var(--s1);border:1px solid var(--border);border-radius:20px;padding:40px;width:100%;max-width:560px;position:relative;z-index:1;animation:fadeUp 0.4s ease}
+.step-page{display:none}
+.step-page.active{display:block}
+
+/* Step header */
+.step-header{margin-bottom:28px}
+.step-num{font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+.step-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:6px}
+.step-desc{font-size:12px;color:var(--muted2);line-height:1.7}
+
+/* Fields */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;transition:border-color 0.15s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field input::placeholder{color:var(--muted)}
+.field-hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6}
+.field-hint a{color:var(--accent);text-decoration:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-size:12px}
+.toggle-desc{font-size:10px;color:var(--muted2);margin-top:2px}
+.toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:11px;cursor:pointer;transition:0.2s}
+.toggle-track::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:3px;left:3px;transition:0.2s}
+.toggle input:checked+.toggle-track{background:var(--accent)}
+.toggle input:checked+.toggle-track::after{transform:translateX(18px)}
+
+/* Buttons */
+.btn-row{display:flex;gap:10px;margin-top:28px;justify-content:space-between;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:10px;font-family:'DM Mono',monospace;font-size:13px;border:none;cursor:pointer;transition:all 0.15s;font-weight:500}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#4a4de0;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.btn-ghost{background:var(--s2);color:var(--muted2);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--accent)}
+.btn-test{background:rgba(91,94,244,0.12);color:#a5b4fc;border:1px solid rgba(91,94,244,0.25)}
+.btn-test:hover{background:rgba(91,94,244,0.2)}
+.btn-skip{background:none;color:var(--muted);border:none;font-size:11px;padding:8px;cursor:pointer}
+.btn-skip:hover{color:var(--muted2)}
+
+/* Alerts */
+.alert{padding:10px 14px;border-radius:8px;font-size:11px;margin-top:12px;display:none}
+.alert.show{display:block}
+.alert.success{background:rgba(0,192,48,0.1);border:1px solid rgba(0,192,48,0.2);color:var(--success)}
+.alert.error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--error)}
+.alert.warn{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:var(--warn)}
+
+/* Info box */
+.info-box{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:11px;color:var(--muted2);line-height:1.8;margin-bottom:16px}
+.info-box strong{color:var(--text)}
+.info-box code{background:var(--bg);padding:1px 6px;border-radius:4px;color:var(--accent);font-size:10px}
+
+/* Complete step */
+.complete-icon{font-size:48px;text-align:center;margin-bottom:16px;animation:pop 0.5s ease}
+.complete-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;text-align:center;margin-bottom:8px}
+.complete-desc{font-size:12px;color:var(--muted2);text-align:center;line-height:1.8;margin-bottom:24px}
+.feature-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px}
+.feature-item{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--s2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--muted2)}
+.feature-item .fi{font-size:14px}
+
+/* Separator */
+.sep{display:flex;align-items:center;gap:10px;margin:18px 0}
+.sep::before,.sep::after{content:'';flex:1;height:1px;background:var(--border)}
+.sep span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+
+/* Spinner */
+.spin{animation:spin 0.8s linear infinite;display:inline-block}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pop{0%{transform:scale(0.5);opacity:0}80%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+@media(max-width:600px){.grid-2{grid-template-columns:1fr}.feature-list{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg-dots"></div>
+<div class="bg-glow"></div>
+
+<div class="wizard-header">
+  <div class="wizard-logo">
+    <span class="badge badge-trakt">TRAKT</span>
+    <span class="logo-arrow">→</span>
+    <span class="badge badge-lb">LETTERBOXD</span>
+  </div>
+  <div class="wizard-title">Setup Wizard</div>
+  <div class="wizard-sub">Let's get your sync running in 2 minutes</div>
+</div>
+
+<!-- Steps indicator -->
+<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:560px;margin-bottom:32px">
+  <div style="display:flex;align-items:center;width:100%">
+    <div class="step-dot active" id="dot1">1</div>
+    <div class="step-line" id="line1"></div>
+    <div class="step-dot" id="dot2">2</div>
+    <div class="step-line" id="line2"></div>
+    <div class="step-dot" id="dot3">3</div>
+    <div class="step-line" id="line3"></div>
+    <div class="step-dot" id="dot4">4</div>
+    <div class="step-line" id="line4"></div>
+    <div class="step-dot" id="dot5">5</div>
+  </div>
+  <div style="display:flex;justify-content:space-between;width:100%;margin-top:8px">
+    <span style="font-size:9px;color:var(--muted2);text-align:center;width:32px">Trakt</span>
+    <span style="font-size:9px;color:var(--muted2);text-align:center;flex:1">LBD</span>
+    <span style="font-size:9px;color:var(--muted2);text-align:center;flex:1">Schedule</span>
+    <span style="font-size:9px;color:var(--muted2);text-align:center;flex:1">Notify</span>
+    <span style="font-size:9px;color:var(--muted2);text-align:center;width:32px">Login</span>
+  </div>
+</div>
+
+<div class="wizard-card">
+
+  <!-- Step 1: Trakt -->
+  <div class="step-page active" id="step1">
+    <div class="step-header">
+      <div class="step-num">Step 1 of 5</div>
+      <div class="step-title">🎬 Connect Trakt</div>
+      <div class="step-desc">Enter your Trakt API credentials. These are needed to fetch your watch history.</div>
+    </div>
+
+    <div class="info-box">
+      <strong>Get your API credentials:</strong><br>
+      1. Go to <a href="https://trakt.tv/oauth/applications" target="_blank">trakt.tv/oauth/applications</a><br>
+      2. Click <strong>New Application</strong><br>
+      3. Name it anything, set redirect URI to <code>urn:ietf:wg:oauth:2.0:oob</code><br>
+      4. Copy Client ID and Secret below
+    </div>
+
+    <div class="field">
+      <label>Client ID <span style="color:var(--error)">*</span></label>
+      <input id="s1ClientId" type="text" placeholder="0e4b935c2a57637c61e9afa...">
+    </div>
+    <div class="field">
+      <label>Client Secret</label>
+      <input id="s1ClientSecret" type="password" placeholder="e5a5f2903d2bc5c6b48df7...">
+    </div>
+    <div class="field">
+      <label>Trakt Username <span style="color:var(--error)">*</span></label>
+      <input id="s1Username" type="text" placeholder="your_trakt_username">
+    </div>
+
+    <div class="sep"><span>Private profile only</span></div>
+
+    <div class="field">
+      <label>Access Token <span style="color:var(--muted)">(optional)</span></label>
+      <input id="s1Token" type="password" placeholder="Leave empty for public profiles">
+      <div class="field-hint">Only needed if your Trakt profile is private. See README for how to get this.</div>
+    </div>
+
+    <div id="s1Alert" class="alert"></div>
+
+    <div class="btn-row">
+      <div></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-test" onclick="testTrakt()"><span id="testIcon">⚡</span> Test Connection</button>
+        <button class="btn btn-primary" id="s1Next" onclick="goStep(2)" disabled>Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Letterboxd -->
+  <div class="step-page" id="step2">
+    <div class="step-header">
+      <div class="step-num">Step 2 of 5</div>
+      <div class="step-title">🎞 Connect Letterboxd</div>
+      <div class="step-desc">Enter your Letterboxd credentials to enable automatic CSV upload after each sync.</div>
+    </div>
+
+    <div class="info-box">
+      <strong>How it works:</strong> After fetching from Trakt, the app logs into Letterboxd using a headless browser and uploads your CSV automatically. Your password is stored locally on your server only.
+    </div>
+
+    <div class="field">
+      <label>Letterboxd Username <span style="color:var(--error)">*</span></label>
+      <input id="s2LbUsername" type="text" placeholder="your_letterboxd_username">
+    </div>
+    <div class="field">
+      <label>Letterboxd Password <span style="color:var(--error)">*</span></label>
+      <input id="s2LbPassword" type="password" placeholder="your_password">
+      <div class="field-hint">Stored locally in <code>logs/config.json</code> — never sent anywhere else.</div>
+    </div>
+
+    <div class="sep"><span>Options</span></div>
+
+    <div class="toggle-row">
+      <div><div class="toggle-label">Enable Auto-Import</div><div class="toggle-desc">Automatically upload to Letterboxd after each sync</div></div>
+      <label class="toggle"><input type="checkbox" id="s2AutoImport" checked><span class="toggle-track"></span></label>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
+      <button class="btn btn-skip" onclick="goStep(3)">Skip for now</button>
+      <button class="btn btn-primary" onclick="goStep(3)">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Schedule -->
+  <div class="step-page" id="step3">
+    <div class="step-header">
+      <div class="step-num">Step 3 of 5</div>
+      <div class="step-title">⏰ Set Schedule</div>
+      <div class="step-desc">Choose when the app should automatically sync your Trakt history each day.</div>
+    </div>
+
+    <div class="field">
+      <label>Daily Sync Time</label>
+      <input type="time" id="s3SyncTime" value="03:00">
+      <div class="field-hint">The app will sync automatically at this time every day. Pick a time when you're usually asleep.</div>
+    </div>
+
+    <div class="field">
+      <label>Sync Mode</label>
+      <select id="s3SyncMode">
+        <option value="incremental">Incremental — only fetch new entries since last sync (recommended)</option>
+        <option value="full">Full — fetch entire history every time</option>
+      </select>
+    </div>
+
+    <div class="sep"><span>What to sync</span></div>
+
+    <div class="toggle-row">
+      <div><div class="toggle-label">Watch History</div><div class="toggle-desc">All movies you've watched with dates</div></div>
+      <label class="toggle"><input type="checkbox" id="s3History" checked><span class="toggle-track"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Ratings</div><div class="toggle-desc">Trakt 1–10 → Letterboxd ½–5 stars</div></div>
+      <label class="toggle"><input type="checkbox" id="s3Ratings" checked><span class="toggle-track"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Watchlist</div><div class="toggle-desc">Include your Trakt watchlist in the CSV</div></div>
+      <label class="toggle"><input type="checkbox" id="s3Watchlist"><span class="toggle-track"></span></label>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
+      <button class="btn btn-primary" onclick="goStep(4)">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Telegram -->
+  <div class="step-page" id="step4">
+    <div class="step-header">
+      <div class="step-num">Step 4 of 5</div>
+      <div class="step-title">📱 Telegram Notifications</div>
+      <div class="step-desc">Get a Telegram message after every sync with the film count and status. Totally optional.</div>
+    </div>
+
+    <div class="info-box">
+      <strong>Setup in 2 steps:</strong><br>
+      1. Message <a href="https://t.me/BotFather" target="_blank">@BotFather</a> on Telegram → <code>/newbot</code> → copy token<br>
+      2. Message <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> to get your Chat ID
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label>Bot Token</label>
+        <input id="s4TgToken" type="text" placeholder="123456:ABC-DEF1234...">
+      </div>
+      <div class="field">
+        <label>Chat ID</label>
+        <input id="s4TgChatId" type="text" placeholder="-1001234567890">
+      </div>
+    </div>
+
+    <div id="s4Alert" class="alert"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goStep(3)">← Back</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-test" onclick="testTelegram()">📨 Test</button>
+        <button class="btn btn-skip" onclick="goStep(5)">Skip</button>
+        <button class="btn btn-primary" onclick="goStep(5)">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5: UI Login -->
+  <div class="step-page" id="step5">
+    <div class="step-header">
+      <div class="step-num">Step 5 of 5</div>
+      <div class="step-title">🔐 Dashboard Login</div>
+      <div class="step-desc">Set a username and password to protect your dashboard. Anyone on your network can access it otherwise.</div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label>Username <span style="color:var(--error)">*</span></label>
+        <input id="s5UiUser" type="text" placeholder="admin" value="admin">
+      </div>
+      <div class="field">
+        <label>Password <span style="color:var(--error)">*</span></label>
+        <input id="s5UiPass" type="password" placeholder="choose a strong password">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Dashboard Port</label>
+      <input id="s5Port" type="text" placeholder="8888 (restart required to change)" value="8888" disabled>
+      <div class="field-hint">Port is set via <code>PORT=8888 ./run.sh</code> at startup.</div>
+    </div>
+
+    <div id="s5Alert" class="alert"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goStep(4)">← Back</button>
+      <button class="btn btn-primary" id="finishBtn" onclick="finishSetup()">🚀 Complete Setup</button>
+    </div>
+  </div>
+
+  <!-- Complete -->
+  <div class="step-page" id="stepDone">
+    <div class="complete-icon">🎉</div>
+    <div class="complete-title">You're all set!</div>
+    <div class="complete-desc">
+      Your sync is configured and ready to go.<br>
+      Head to the dashboard to run your first sync.
+    </div>
+    <div class="feature-list">
+      <div class="feature-item"><span class="fi">⚡</span> Sync Now button</div>
+      <div class="feature-item"><span class="fi">⏰</span> Daily scheduler</div>
+      <div class="feature-item"><span class="fi">🎬</span> Movie browser</div>
+      <div class="feature-item"><span class="fi">📊</span> Sync history</div>
+      <div class="feature-item"><span class="fi">🔍</span> Movie search</div>
+      <div class="feature-item"><span class="fi">🌙</span> Dark / light theme</div>
+    </div>
+    <a href="/" class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;font-size:14px">
+      Go to Dashboard →
+    </a>
+  </div>
+
+</div>
+
+<script>
+let currentStep = 1;
+const totalSteps = 5;
+
+function goStep(n) {
+  document.getElementById(`step${currentStep === 'done' ? 'Done' : currentStep}`).classList.remove('active');
+  if(n === 'done') {
+    document.getElementById('stepDone').classList.add('active');
+    currentStep = 'done';
+    updateDots(6);
+  } else {
+    document.getElementById(`step${n}`).classList.add('active');
+    currentStep = n;
+    updateDots(n);
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function updateDots(n) {
+  for(let i=1; i<=5; i++) {
+    const dot = document.getElementById(`dot${i}`);
+    const line = document.getElementById(`line${i}`);
+    if(i < n) { dot.className='step-dot done'; dot.textContent='✓'; }
+    else if(i === n) { dot.className='step-dot active'; dot.textContent=i; }
+    else { dot.className='step-dot'; dot.textContent=i; }
+    if(line) line.className = i < n ? 'step-line done' : 'step-line';
+  }
+}
+
+async function testTrakt() {
+  const icon = document.getElementById('testIcon');
+  const alert = document.getElementById('s1Alert');
+  icon.className = 'spin'; icon.textContent = '⟳';
+  alert.className = 'alert';
+
+  const data = {
+    client_id: document.getElementById('s1ClientId').value.trim(),
+    client_secret: document.getElementById('s1ClientSecret').value.trim(),
+    username: document.getElementById('s1Username').value.trim(),
+    access_token: document.getElementById('s1Token').value.trim(),
+  };
+
+  if(!data.client_id || !data.username) {
+    alert.className = 'alert error show';
+    alert.textContent = 'Client ID and Username are required';
+    icon.className=''; icon.textContent='⚡'; return;
+  }
+
+  try {
+    const r = await fetch('/api/setup/test-trakt', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const d = await r.json();
+    if(d.ok) {
+      alert.className = 'alert success show';
+      alert.textContent = `✓ Connected! @${d.username} — ${d.watched} films`;
+      document.getElementById('s1Next').disabled = false;
+    } else {
+      alert.className = 'alert error show';
+      alert.textContent = `✗ ${d.error}`;
+    }
+  } catch(e) {
+    alert.className = 'alert error show';
+    alert.textContent = `✗ Connection failed: ${e.message}`;
+  }
+  icon.className=''; icon.textContent='⚡';
+}
+
+async function testTelegram() {
+  const token = document.getElementById('s4TgToken').value.trim();
+  const chatId = document.getElementById('s4TgChatId').value.trim();
+  const alert = document.getElementById('s4Alert');
+  if(!token || !chatId) { alert.className='alert warn show'; alert.textContent='Enter both token and chat ID first'; return; }
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:chatId, text:'✅ *Test*\ntrakt-to-letterboxd is connected!', parse_mode:'Markdown'})});
+    const d = await r.json();
+    if(d.ok) { alert.className='alert success show'; alert.textContent='✓ Message sent!'; }
+    else { alert.className='alert error show'; alert.textContent=`✗ ${d.description}`; }
+  } catch(e) { alert.className='alert error show'; alert.textContent=`✗ ${e.message}`; }
+}
+
+async function finishSetup() {
+  const user = document.getElementById('s5UiUser').value.trim();
+  const pass = document.getElementById('s5UiPass').value.trim();
+  const alert = document.getElementById('s5Alert');
+  if(!user || !pass) { alert.className='alert error show'; alert.textContent='Username and password are required'; return; }
+  if(pass.length < 6) { alert.className='alert warn show'; alert.textContent='Password should be at least 6 characters'; return; }
+
+  const btn = document.getElementById('finishBtn');
+  btn.disabled = true; btn.textContent = 'Setting up...';
+
+  const cfg = {
+    client_id:       document.getElementById('s1ClientId').value.trim(),
+    client_secret:   document.getElementById('s1ClientSecret').value.trim(),
+    username:        document.getElementById('s1Username').value.trim(),
+    access_token:    document.getElementById('s1Token').value.trim(),
+    lb_username:     document.getElementById('s2LbUsername').value.trim(),
+    lb_password:     document.getElementById('s2LbPassword').value.trim(),
+    auto_import:     document.getElementById('s2AutoImport').checked,
+    sync_time:       document.getElementById('s3SyncTime').value,
+    sync_mode:       document.getElementById('s3SyncMode').value,
+    sync_history:    document.getElementById('s3History').checked,
+    sync_ratings:    document.getElementById('s3Ratings').checked,
+    sync_watchlist:  document.getElementById('s3Watchlist').checked,
+    telegram_token:  document.getElementById('s4TgToken').value.trim(),
+    telegram_chat_id:document.getElementById('s4TgChatId').value.trim(),
+    ui_username:     user,
+    ui_password:     pass,
+    theme:           'dark',
+    setup_complete:  true,
+  };
+
+  try {
+    const r = await fetch('/api/setup/complete', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg)});
+    const d = await r.json();
+    if(d.ok) { goStep('done'); }
+    else { alert.className='alert error show'; alert.textContent='Setup failed — try again'; btn.disabled=false; btn.textContent='🚀 Complete Setup'; }
+  } catch(e) {
+    alert.className='alert error show'; alert.textContent=`Error: ${e.message}`;
+    btn.disabled=false; btn.textContent='🚀 Complete Setup';
+  }
+}
+
+// Allow pressing Enter
+document.addEventListener('keydown', e => {
+  if(e.key==='Enter' && currentStep===1) testTrakt();
+});
+</script>
+</body>
+</html>
