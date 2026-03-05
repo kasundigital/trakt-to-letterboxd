@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trakt → Letterboxd Sync</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+/* ── Themes ── */
+[data-theme="dark"]{
+  --bg:#07070f;--s1:#0e0e1c;--s2:#131325;--s3:#1a1a2e;--border:#1e1e35;
+  --text:#e2e2f0;--muted:#5a5a78;--muted2:#8888aa;--card-bg:#0e0e1c;
+}
+[data-theme="light"]{
+  --bg:#f0f0f8;--s1:#ffffff;--s2:#f5f5fc;--s3:#ebebf8;--border:#d0d0e8;
+  --text:#1a1a2e;--muted:#9090b0;--muted2:#6060a0;--card-bg:#ffffff;
+}
+:root{
+  --accent:#5b5ef4;--trakt:#ed1c24;--lb:#00c030;
+  --success:#00c030;--warn:#f59e0b;--error:#ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;display:flex;transition:background 0.3s,color 0.3s}
+
+/* ── Sidebar ── */
+.sidebar{width:230px;min-height:100vh;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:background 0.3s}
+.sidebar-logo{padding:24px 20px 18px;border-bottom:1px solid var(--border)}
+.wordmark{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+.badge-row{display:flex;gap:6px;margin-top:8px;align-items:center}
+.badge{padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.badge-trakt{background:var(--trakt);color:#fff}
+.badge-lb{background:var(--lb);color:#000}
+.badge-arrow{color:var(--muted);font-size:12px}
+.nav{padding:14px 10px;flex:1;overflow-y:auto}
+.nav-section{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;padding:10px 10px 6px;margin-top:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;font-size:12px;color:var(--muted2);transition:all 0.15s;margin-bottom:2px;user-select:none}
+.nav-item:hover{background:var(--s3);color:var(--text)}
+.nav-item.active{background:var(--accent);color:#fff}
+.nav-icon{font-size:14px;width:18px;text-align:center}
+.sidebar-bottom{padding:14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.status-pill{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:var(--s3);font-size:11px;color:var(--muted2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.dot.green{background:var(--success);box-shadow:0 0 6px var(--success)}
+.dot.orange{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.dot.pulse{animation:pulse 1.5s infinite}
+.user-pill{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:var(--s3);font-size:11px;cursor:pointer;transition:background 0.15s}
+.user-pill:hover{background:var(--border)}
+.avatar{width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* ── Main ── */
+.main{margin-left:230px;flex:1;padding:32px;max-width:calc(100vw - 230px)}
+.page{display:none}
+.page.active{display:block}
+.page-header{margin-bottom:28px;display:flex;align-items:flex-start;justify-content:space-between}
+.page-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:4px}
+.page-sub{font-size:11px;color:var(--muted2)}
+
+/* ── Cards ── */
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px;transition:background 0.3s,border-color 0.3s}
+.card-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:1px;color:var(--muted2)}
+
+/* ── Stats ── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px;transition:all 0.2s;cursor:default}
+.stat:hover{border-color:var(--accent);transform:translateY(-2px)}
+.stat-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1;margin-bottom:6px}
+.stat-label{font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;font-family:'DM Mono',monospace;font-size:12px;border:none;cursor:pointer;transition:all 0.15s;font-weight:500;text-decoration:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#4a4de0;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.btn-success{background:rgba(0,192,48,0.12);color:var(--success);border:1px solid rgba(0,192,48,0.25)}
+.btn-success:hover{background:rgba(0,192,48,0.22)}
+.btn-lb{background:rgba(0,192,48,0.15);color:var(--lb);border:1px solid rgba(0,192,48,0.3)}
+.btn-lb:hover{background:rgba(0,192,48,0.25)}
+.btn-danger{background:rgba(239,68,68,0.1);color:var(--error);border:1px solid rgba(239,68,68,0.2)}
+.btn-danger:hover{background:rgba(239,68,68,0.2)}
+.btn-ghost{background:var(--s3);color:var(--muted2);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--accent)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+
+/* ── Form ── */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;transition:border-color 0.15s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field input::placeholder{color:var(--muted)}
+.field-hint{font-size:10px;color:var(--muted);margin-top:5px;line-height:1.5}
+.field-hint a{color:var(--accent);text-decoration:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* ── Toggle ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-info .label{font-size:12px}
+.toggle-info .desc{font-size:10px;color:var(--muted2);margin-top:2px}
+.toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:11px;cursor:pointer;transition:0.2s}
+.toggle-track::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:3px;left:3px;transition:0.2s}
+.toggle input:checked+.toggle-track{background:var(--accent)}
+.toggle input:checked+.toggle-track::after{transform:translateX(18px)}
+
+/* ── Log ── */
+.log-wrap{background:var(--bg);border:1px solid var(--border);border-radius:10px;height:260px;overflow-y:auto;padding:14px;font-size:11px;line-height:2}
+.log-entry{display:flex;gap:10px}
+.log-ts{color:var(--muted);flex-shrink:0}
+.log-msg.info{color:var(--muted2)}
+.log-msg.success{color:var(--success)}
+.log-msg.error{color:var(--error)}
+.log-msg.warn{color:var(--warn)}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead th{background:var(--s2);padding:10px 14px;text-align:left;font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:1.5px;font-weight:500;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s}
+tbody tr:hover{background:var(--s2)}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:10px 14px;color:var(--text)}
+.rating-stars{color:var(--warn)}
+.tag{display:inline-flex;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+.tag-watched{background:rgba(91,94,244,0.15);color:#a5b4fc}
+.tag-watchlist{background:rgba(0,192,48,0.12);color:var(--success)}
+.tag-rewatch{background:rgba(245,158,11,0.15);color:var(--warn)}
+
+/* ── Search ── */
+.search-wrap{position:relative;margin-bottom:16px}
+.search-wrap input{width:100%;padding:11px 16px 11px 38px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;transition:border-color 0.15s}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+.search-results{position:absolute;top:100%;left:0;right:0;background:var(--s1);border:1px solid var(--border);border-radius:10px;margin-top:4px;z-index:50;max-height:300px;overflow-y:auto;display:none}
+.search-results.show{display:block}
+.search-result-item{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s;display:flex;align-items:center;gap:12px}
+.search-result-item:hover{background:var(--s2)}
+.search-result-item:last-child{border-bottom:none}
+.result-title{font-size:12px;font-weight:500}
+.result-year{font-size:10px;color:var(--muted2)}
+.result-imdb{font-size:10px;color:var(--accent)}
+
+/* ── Flow ── */
+.flow{display:flex;align-items:center;gap:8px;padding:14px 18px;background:var(--s2);border-radius:12px;margin-bottom:16px;font-size:11px;flex-wrap:wrap;border:1px solid var(--border)}
+.flow-step{padding:5px 14px;border-radius:6px;font-weight:600;font-size:11px}
+.flow-trakt{background:rgba(237,28,36,0.15);color:var(--trakt);border:1px solid rgba(237,28,36,0.25)}
+.flow-auto{background:rgba(91,94,244,0.15);color:#a5b4fc;border:1px solid rgba(91,94,244,0.25)}
+.flow-lb{background:rgba(0,192,48,0.15);color:var(--lb);border:1px solid rgba(0,192,48,0.25)}
+.flow-arrow{color:var(--muted);font-size:14px}
+
+/* ── Progress ── */
+.progress-wrap{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin:12px 0;display:none}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--lb));border-radius:2px;transition:width 0.4s ease}
+
+/* ── Schedule ── */
+.schedule-info{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--s2);border:1px solid var(--border);border-radius:10px;margin-bottom:14px}
+.schedule-text{font-size:12px;flex:1}
+
+/* ── File list ── */
+.file-item{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:12px;transition:border-color 0.15s}
+.file-item:hover{border-color:var(--accent)}
+.file-name{flex:1}
+.file-tag{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:600}
+.file-tag.latest{background:rgba(0,192,48,0.15);color:var(--success)}
+
+/* ── Pagination ── */
+.pagination{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:11px}
+.page-btn{padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--s2);color:var(--muted2);cursor:pointer;transition:all 0.15s;font-family:'DM Mono',monospace;font-size:11px}
+.page-btn:hover{border-color:var(--accent);color:var(--text)}
+.page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.page-btn:disabled{opacity:0.3;cursor:not-allowed}
+
+/* ── History ── */
+.history-item{display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;transition:border-color 0.15s}
+.history-item:hover{border-color:var(--border)}
+.history-run{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;width:36px;flex-shrink:0;color:var(--accent)}
+.history-info{flex:1}
+.history-time{font-size:11px;color:var(--muted2)}
+.history-stats{display:flex;gap:12px;margin-top:4px;font-size:11px}
+.history-badge{padding:2px 8px;border-radius:4px;font-size:10px}
+.hb-success{background:rgba(0,192,48,0.12);color:var(--success)}
+.hb-mode{background:rgba(91,94,244,0.12);color:#a5b4fc}
+
+/* ── Theme toggle ── */
+.theme-toggle{padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--s3);cursor:pointer;font-size:14px;display:flex;align-items:center;gap:6px;color:var(--muted2);transition:all 0.15s;font-family:'DM Mono',monospace;font-size:11px}
+.theme-toggle:hover{border-color:var(--accent);color:var(--text)}
+
+/* ── Alert ── */
+.alert{padding:10px 14px;border-radius:8px;font-size:11px;margin-bottom:14px;display:none}
+.alert.show{display:block}
+.alert.success{background:rgba(0,192,48,0.1);border:1px solid rgba(0,192,48,0.2);color:var(--success)}
+.alert.error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--error)}
+
+/* ── Section sep ── */
+.section-sep{display:flex;align-items:center;gap:10px;margin:18px 0 14px}
+.section-sep span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;white-space:nowrap}
+.section-sep::before,.section-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:48px 24px;color:var(--muted2)}
+.empty-icon{font-size:32px;margin-bottom:12px}
+.empty-text{font-size:12px}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin 0.8s linear infinite}
+
+@media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.grid-2,.grid-3{grid-template-columns:1fr}}
+@media(max-width:680px){.sidebar{width:60px}.sidebar .wordmark,.sidebar .badge-row,.nav-item span,.sidebar-bottom .status-pill span{display:none}.main{margin-left:60px;padding:16px}}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="wordmark">SYNC</div>
+    <div class="badge-row">
+      <span class="badge badge-trakt">TRAKT</span>
+      <span class="badge-arrow">→</span>
+      <span class="badge badge-lb">LBD</span>
+    </div>
+  </div>
+  <nav class="nav">
+    <div class="nav-section">Main</div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">◉</span><span>Dashboard</span></div>
+    <div class="nav-item" onclick="showPage('movies',this)"><span class="nav-icon">🎬</span><span>Movies</span></div>
+    <div class="nav-item" onclick="showPage('watchlist',this)"><span class="nav-icon">📋</span><span>Watchlist</span></div>
+    <div class="nav-item" onclick="showPage('history',this)"><span class="nav-icon">📊</span><span>Sync History</span></div>
+    <div class="nav-item" onclick="showPage('search',this)"><span class="nav-icon">🔍</span><span>Search</span></div>
+    <div class="nav-section">System</div>
+    <div class="nav-item" onclick="showPage('settings',this)"><span class="nav-icon">⚙</span><span>Settings</span></div>
+    <div class="nav-item" onclick="showPage('files',this)"><span class="nav-icon">↓</span><span>Downloads</span></div>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="status-pill">
+      <div class="dot" id="sidebarDot"></div>
+      <span id="sidebarStatus">Idle</span>
+    </div>
+    <div class="user-pill" onclick="window.location='/logout'">
+      <div class="avatar" id="avatarLetter">A</div>
+      <span id="avatarName">Admin</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Dashboard -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Full automation: Trakt → CSV → Letterboxd</div>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙 Dark</button>
+    </div>
+
+    <div class="flow">
+      <span class="flow-step flow-trakt">Trakt API</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step flow-auto">This App</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step flow-auto">CSV</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step flow-lb" id="flowLb">Letterboxd ✓</span>
+      <span style="margin-left:auto;font-size:10px" id="flowMode"></span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-val" id="statSynced">—</div><div class="stat-label">Films Synced</div></div>
+      <div class="stat"><div class="stat-val" id="statImported">—</div><div class="stat-label">LBD Imported</div></div>
+      <div class="stat"><div class="stat-val" id="statRuns">—</div><div class="stat-label">Sync Runs</div></div>
+      <div class="stat"><div class="stat-val" id="statNext">—</div><div class="stat-label">Next Run</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏰ Scheduler</div>
+      <div class="schedule-info">
+        <div class="dot" id="schedDot"></div>
+        <div class="schedule-text" id="schedText">Scheduler inactive</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-success" id="startSchedBtn" onclick="startScheduler()">▶ Start Scheduler</button>
+        <button class="btn btn-danger" id="stopSchedBtn" onclick="stopScheduler()" style="display:none">⏹ Stop</button>
+        <button class="btn btn-primary" id="syncNowBtn" onclick="syncNow()">⚡ Sync Now</button>
+        <button class="btn btn-lb" id="importOnlyBtn" onclick="importOnly()">↑ Import to LBD</button>
+      </div>
+      <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>📋 Activity Log</span>
+        <button class="btn btn-ghost" onclick="clearLogs()" style="padding:4px 10px;font-size:10px">Clear</button>
+      </div>
+      <div class="log-wrap" id="logWrap"></div>
+    </div>
+  </div>
+
+  <!-- Movies -->
+  <div class="page" id="page-movies">
+    <div class="page-header">
+      <div><div class="page-title">Movies</div><div class="page-sub">All synced films from Trakt</div></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="search-wrap" style="flex:1;min-width:200px;margin-bottom:0">
+          <span class="search-icon">🔎</span>
+          <input type="text" id="movieSearch" placeholder="Search movies..." oninput="filterMovies()">
+        </div>
+        <select id="movieType" onchange="filterMovies()" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none">
+          <option value="all">All Types</option>
+          <option value="watched">Watched</option>
+          <option value="watchlist">Watchlist</option>
+        </select>
+      </div>
+      <div id="movieCount" style="font-size:10px;color:var(--muted2);margin-bottom:10px"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Title</th><th>Year</th><th>Date Watched</th><th>Rating</th><th>Type</th><th>IMDb</th></tr></thead>
+          <tbody id="movieTableBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="moviePagination"></div>
+    </div>
+  </div>
+
+  <!-- Watchlist -->
+  <div class="page" id="page-watchlist">
+    <div class="page-header">
+      <div><div class="page-title">Watchlist</div><div class="page-sub">Your Trakt watchlist</div></div>
+      <button class="btn btn-ghost" onclick="loadWatchlist()">↻ Refresh</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Title</th><th>Year</th><th>Added</th><th>IMDb</th></tr></thead>
+          <tbody id="watchlistBody"><tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted2)">Click refresh to load watchlist</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="page" id="page-history">
+    <div class="page-header">
+      <div><div class="page-title">Sync History</div><div class="page-sub">Log of all past sync runs</div></div>
+    </div>
+    <div id="historyList"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">No sync runs yet</div></div></div>
+  </div>
+
+  <!-- Search -->
+  <div class="page" id="page-search">
+    <div class="page-header">
+      <div><div class="page-title">Movie Search</div><div class="page-sub">Search Trakt database</div></div>
+    </div>
+    <div class="card">
+      <div class="search-wrap" style="margin-bottom:0;position:relative">
+        <span class="search-icon">🔎</span>
+        <input type="text" id="globalSearch" placeholder="Search any movie..." oninput="debounceSearch()">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+    <div id="searchDetail" style="display:none" class="card">
+      <div id="searchDetailContent"></div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="page" id="page-settings">
+    <div class="page-header">
+      <div><div class="page-title">Settings</div><div class="page-sub">Configure credentials and preferences</div></div>
+    </div>
+    <div id="saveAlert" class="alert"></div>
+
+    <div class="card">
+      <div class="card-title">🎬 Trakt</div>
+      <div class="grid-2">
+        <div class="field"><label>Client ID</label><input id="cfgClientId" type="text" placeholder="client_id"><div class="field-hint"><a href="https://trakt.tv/oauth/applications" target="_blank">trakt.tv/oauth/applications</a></div></div>
+        <div class="field"><label>Client Secret</label><input id="cfgClientSecret" type="password" placeholder="client_secret"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Username</label><input id="cfgUsername" type="text" placeholder="your_username"></div>
+        <div class="field"><label>Access Token</label><input id="cfgToken" type="password" placeholder="oauth_access_token (private profiles)"></div>
+      </div>
+      <button class="btn btn-ghost" onclick="testConnection()"><span id="testIcon">⚡</span> Test Connection <span id="testResult" style="margin-left:6px"></span></button>
+    </div>
+
+    <div class="card" style="border-color:rgba(0,192,48,0.2)">
+      <div class="card-title">🎞 Letterboxd Auto-Import</div>
+      <div class="toggle-row" style="margin-bottom:14px;border-bottom:none">
+        <div class="toggle-info"><div class="label">Enable Auto-Import</div><div class="desc">Auto-upload CSV to Letterboxd after each sync</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgAutoImport"><span class="toggle-track"></span></label>
+      </div>
+      <div class="section-sep"><span>Letterboxd Account</span></div>
+      <div class="grid-2">
+        <div class="field"><label>Username</label><input id="cfgLbUsername" type="text" placeholder="letterboxd_username"></div>
+        <div class="field"><label>Password</label><input id="cfgLbPassword" type="password" placeholder="password"><div class="field-hint">Stored locally in logs/config.json</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(41,182,246,0.2)">
+      <div class="card-title">📱 Telegram Notifications</div>
+      <div class="grid-2">
+        <div class="field"><label>Bot Token</label><input id="cfgTelegramToken" type="text" placeholder="123456:ABC-DEF..."><div class="field-hint">From @BotFather on Telegram</div></div>
+        <div class="field"><label>Chat ID</label><input id="cfgTelegramChatId" type="text" placeholder="-1001234567890"><div class="field-hint">Your chat or group ID</div></div>
+      </div>
+      <button class="btn btn-ghost" onclick="testTelegram()">📨 Send Test Message</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚙ Sync Options</div>
+      <div class="toggle-row"><div class="toggle-info"><div class="label">Watch History</div><div class="desc">All movies you've watched</div></div><label class="toggle"><input type="checkbox" id="cfgHistory" checked><span class="toggle-track"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="label">Ratings</div><div class="desc">Trakt 1–10 → Letterboxd ½–5 stars</div></div><label class="toggle"><input type="checkbox" id="cfgRatings" checked><span class="toggle-track"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="label">Watchlist</div><div class="desc">Include watchlist in CSV</div></div><label class="toggle"><input type="checkbox" id="cfgWatchlist"><span class="toggle-track"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="label">Run on Start</div><div class="desc">Sync when server starts</div></div><label class="toggle"><input type="checkbox" id="cfgRunOnStart"><span class="toggle-track"></span></label></div>
+      <hr>
+      <div class="grid-2">
+        <div class="field"><label>Daily Sync Time</label><input type="time" id="cfgSyncTime" value="03:00"></div>
+        <div class="field"><label>Sync Mode</label><select id="cfgSyncMode"><option value="incremental">Incremental (new only)</option><option value="full">Full (all history)</option></select></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔐 UI Login</div>
+      <div class="grid-2">
+        <div class="field"><label>Dashboard Username</label><input id="cfgUiUser" type="text" placeholder="admin"></div>
+        <div class="field"><label>Dashboard Password</label><input id="cfgUiPass" type="password" placeholder="new password"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎨 Appearance</div>
+      <div class="toggle-row" style="border:none">
+        <div class="toggle-info"><div class="label">Dark Mode</div><div class="desc">Toggle between dark and light theme</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgTheme" checked onchange="applyThemeFromToggle()"><span class="toggle-track"></span></label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveConfig()" style="width:100%;justify-content:center;padding:13px;margin-top:4px">💾 Save All Settings</button>
+  </div>
+
+  <!-- Downloads -->
+  <div class="page" id="page-files">
+    <div class="page-header"><div><div class="page-title">Downloads</div><div class="page-sub">Generated CSV files</div></div></div>
+    <div class="card"><div class="card-title">📁 Output Files</div><div id="fileList"></div></div>
+  </div>
+
+</div>
+
+<script>
+let logIndex = 0, progressTimer = null, moviePage = 1, searchTimer = null;
+
+// ── Theme ─────────────────────────────────────────────────────────
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('themeBtn');
+  const tog = document.getElementById('cfgTheme');
+  if(btn) btn.textContent = t === 'dark' ? '🌙 Dark' : '☀️ Light';
+  if(tog) tog.checked = t === 'dark';
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+function applyThemeFromToggle() {
+  applyTheme(document.getElementById('cfgTheme').checked ? 'dark' : 'light');
+}
+
+// ── Nav ───────────────────────────────────────────────────────────
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if(el) el.classList.add('active');
+  if(name === 'files')     loadFiles();
+  if(name === 'settings')  loadConfig();
+  if(name === 'movies')    loadMovies();
+  if(name === 'history')   loadHistory();
+  if(name === 'watchlist') loadWatchlist();
+}
+
+// ── Logs ──────────────────────────────────────────────────────────
+function renderLogs(entries) {
+  const wrap = document.getElementById('logWrap');
+  entries.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<span class="log-ts">${e.time}</span><span class="log-msg ${e.level}">${e.msg}</span>`;
+    wrap.appendChild(div);
+  });
+  wrap.scrollTop = wrap.scrollHeight;
+}
+function pollLogs() {
+  fetch(`/api/logs?since=${logIndex}`).then(r=>r.json()).then(entries => {
+    if(entries.length) { renderLogs(entries); logIndex += entries.length; }
+  });
+}
+async function clearLogs() {
+  await fetch('/api/clear-logs', {method:'POST'});
+  document.getElementById('logWrap').innerHTML = '';
+  logIndex = 0;
+}
+
+// ── Status ────────────────────────────────────────────────────────
+function updateStatus(s) {
+  document.getElementById('statSynced').textContent   = s.state.total_synced ?? '0';
+  document.getElementById('statImported').textContent = s.state.total_imported ?? '0';
+  document.getElementById('statRuns').textContent     = s.state.runs ?? '0';
+
+  const flowLb = document.getElementById('flowLb');
+  const flowMode = document.getElementById('flowMode');
+  if(s.auto_import && s.lb_configured) {
+    flowLb.style.opacity = '1';
+    flowMode.innerHTML = '<span style="color:var(--success)">✓ auto-import ON</span>';
+  } else {
+    flowLb.style.opacity = '0.35';
+    flowMode.innerHTML = '<span style="color:var(--muted)">auto-import OFF</span>';
+  }
+
+  if(s.scheduler_running && s.sync_time) {
+    const [h,m] = s.sync_time.split(':').map(Number);
+    const next = new Date(); next.setHours(h,m,0,0);
+    if(next <= new Date()) next.setDate(next.getDate()+1);
+    document.getElementById('statNext').textContent = next.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  } else {
+    document.getElementById('statNext').textContent = '—';
+  }
+
+  const dot = document.getElementById('schedDot');
+  const text = document.getElementById('schedText');
+  const sd = document.getElementById('sidebarDot');
+  const ss = document.getElementById('sidebarStatus');
+  const startBtn = document.getElementById('startSchedBtn');
+  const stopBtn  = document.getElementById('stopSchedBtn');
+
+  if(s.sync_in_progress) {
+    dot.className = 'dot orange pulse'; text.textContent = 'Sync in progress...';
+    sd.className = 'dot orange pulse'; ss.textContent = 'Syncing';
+    fakeProgress();
+  } else if(s.scheduler_running) {
+    dot.className = 'dot green'; text.textContent = `Active — daily at ${s.sync_time}`;
+    sd.className = 'dot green'; ss.textContent = 'Active';
+    startBtn.style.display = 'none'; stopBtn.style.display = 'inline-flex';
+    stopProgress();
+  } else {
+    dot.className = 'dot'; text.textContent = 'Scheduler inactive';
+    sd.className = 'dot'; ss.textContent = 'Idle';
+    startBtn.style.display = 'inline-flex'; stopBtn.style.display = 'none';
+    stopProgress();
+  }
+  document.getElementById('syncNowBtn').disabled = s.sync_in_progress;
+  document.getElementById('importOnlyBtn').disabled = s.sync_in_progress;
+  applyTheme(s.theme || 'dark');
+}
+
+function fakeProgress() {
+  const wrap = document.getElementById('progressWrap');
+  const bar  = document.getElementById('progressBar');
+  if(wrap.style.display === 'block') return;
+  wrap.style.display = 'block'; let pct = 5;
+  progressTimer = setInterval(() => { if(pct < 88) { pct += Math.random()*2; bar.style.width=pct+'%'; } }, 800);
+}
+function stopProgress() {
+  const wrap = document.getElementById('progressWrap');
+  const bar  = document.getElementById('progressBar');
+  clearInterval(progressTimer);
+  bar.style.width = '100%';
+  setTimeout(() => { wrap.style.display='none'; bar.style.width='0'; }, 700);
+}
+
+// ── Actions ───────────────────────────────────────────────────────
+async function syncNow()       { await fetch('/api/sync',{method:'POST'}); }
+async function startScheduler(){ await fetch('/api/scheduler',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'start'})}); }
+async function stopScheduler() { await fetch('/api/scheduler',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'stop'})}); }
+async function importOnly() {
+  const r = await fetch('/api/import-only',{method:'POST'});
+  const d = await r.json();
+  if(!d.ok) alert(d.message);
+}
+
+// ── Settings ──────────────────────────────────────────────────────
+async function loadConfig() {
+  const cfg = await fetch('/api/config').then(r=>r.json());
+  document.getElementById('cfgClientId').value     = cfg.client_id||'';
+  document.getElementById('cfgClientSecret').value = cfg.client_secret||'';
+  document.getElementById('cfgUsername').value     = cfg.username||'';
+  document.getElementById('cfgToken').value        = cfg.access_token||'';
+  document.getElementById('cfgLbUsername').value   = cfg.lb_username||'';
+  document.getElementById('cfgLbPassword').value   = cfg.lb_password||'';
+  document.getElementById('cfgAutoImport').checked = cfg.auto_import;
+  document.getElementById('cfgHistory').checked    = cfg.sync_history;
+  document.getElementById('cfgRatings').checked    = cfg.sync_ratings;
+  document.getElementById('cfgWatchlist').checked  = cfg.sync_watchlist;
+  document.getElementById('cfgRunOnStart').checked = cfg.run_on_start;
+  document.getElementById('cfgSyncTime').value     = cfg.sync_time||'03:00';
+  document.getElementById('cfgSyncMode').value     = cfg.sync_mode||'incremental';
+  document.getElementById('cfgUiUser').value       = cfg.ui_username||'';
+  document.getElementById('cfgTelegramToken').value  = cfg.telegram_token||'';
+  document.getElementById('cfgTelegramChatId').value = cfg.telegram_chat_id||'';
+  document.getElementById('cfgTheme').checked      = (cfg.theme||'dark')==='dark';
+  applyTheme(cfg.theme||'dark');
+}
+
+async function saveConfig() {
+  const t = document.getElementById('cfgTheme').checked ? 'dark' : 'light';
+  const cfg = {
+    client_id: document.getElementById('cfgClientId').value.trim(),
+    client_secret: document.getElementById('cfgClientSecret').value.trim(),
+    username: document.getElementById('cfgUsername').value.trim(),
+    access_token: document.getElementById('cfgToken').value.trim(),
+    lb_username: document.getElementById('cfgLbUsername').value.trim(),
+    lb_password: document.getElementById('cfgLbPassword').value.trim(),
+    auto_import: document.getElementById('cfgAutoImport').checked,
+    sync_history: document.getElementById('cfgHistory').checked,
+    sync_ratings: document.getElementById('cfgRatings').checked,
+    sync_watchlist: document.getElementById('cfgWatchlist').checked,
+    run_on_start: document.getElementById('cfgRunOnStart').checked,
+    sync_time: document.getElementById('cfgSyncTime').value,
+    sync_mode: document.getElementById('cfgSyncMode').value,
+    ui_username: document.getElementById('cfgUiUser').value.trim(),
+    ui_password: document.getElementById('cfgUiPass').value.trim(),
+    telegram_token: document.getElementById('cfgTelegramToken').value.trim(),
+    telegram_chat_id: document.getElementById('cfgTelegramChatId').value.trim(),
+    theme: t,
+  };
+  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+  applyTheme(t);
+  showAlert('success','✓ Settings saved');
+}
+
+async function testConnection() {
+  const icon = document.getElementById('testIcon');
+  const result = document.getElementById('testResult');
+  icon.className = 'spin'; result.textContent = '';
+  try {
+    const r = await fetch('/api/test',{method:'POST'});
+    const d = await r.json();
+    result.style.color = d.ok ? 'var(--success)' : 'var(--error)';
+    result.textContent = d.ok ? `✓ @${d.username} — ${d.watched} films` : `✗ ${d.error}`;
+  } catch(e) { result.style.color='var(--error)'; result.textContent='✗ Failed'; }
+  icon.className = '';
+}
+
+async function testTelegram() {
+  const r = await fetch('/api/test-telegram',{method:'POST'});
+  const d = await r.json();
+  showAlert(d.ok ? 'success' : 'error', d.ok ? '✓ Telegram message sent!' : `✗ ${d.error}`);
+}
+
+function showAlert(type, msg) {
+  const el = document.getElementById('saveAlert');
+  el.className = `alert ${type} show`;
+  el.textContent = msg;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Movies ────────────────────────────────────────────────────────
+function ratingToStars(r) {
+  if(!r) return '<span style="color:var(--muted)">—</span>';
+  const stars = Math.round(r * 2) / 2;
+  return `<span class="rating-stars">${'★'.repeat(Math.floor(stars))}${stars%1?'½':''}</span> <span style="color:var(--muted2);font-size:10px">${r}</span>`;
+}
+
+async function loadMovies(page=1) {
+  moviePage = page;
+  const q = document.getElementById('movieSearch')?.value || '';
+  const t = document.getElementById('movieType')?.value || 'all';
+  const r = await fetch(`/api/movies?q=${encodeURIComponent(q)}&type=${t}&page=${page}`);
+  const d = await r.json();
+  const tbody = document.getElementById('movieTableBody');
+  document.getElementById('movieCount').textContent = `${d.total} films`;
+
+  if(!d.movies.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted2)">No movies found</td></tr>`;
+    document.getElementById('moviePagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = d.movies.map(m => `
+    <tr>
+      <td><strong>${m.title}</strong></td>
+      <td style="color:var(--muted2)">${m.year||'—'}</td>
+      <td style="color:var(--muted2)">${m.date||'—'}</td>
+      <td>${ratingToStars(m.rating)}</td>
+      <td>${m.rewatch ? '<span class="tag tag-rewatch">Rewatch</span>' : `<span class="tag tag-${m.type||'watched'}">${m.type||'watched'}</span>`}</td>
+      <td>${m.imdb ? `<a href="https://imdb.com/title/${m.imdb}" target="_blank" style="color:var(--accent);text-decoration:none">${m.imdb}</a>` : '—'}</td>
+    </tr>`).join('');
+
+  // Pagination
+  const totalPages = Math.ceil(d.total / d.per_page);
+  let pg = '';
+  if(totalPages > 1) {
+    pg += `<button class="page-btn" onclick="loadMovies(${page-1})" ${page<=1?'disabled':''}>← Prev</button>`;
+    const start = Math.max(1, page-2), end = Math.min(totalPages, page+2);
+    for(let i=start;i<=end;i++) pg += `<button class="page-btn ${i===page?'active':''}" onclick="loadMovies(${i})">${i}</button>`;
+    pg += `<button class="page-btn" onclick="loadMovies(${page+1})" ${page>=totalPages?'disabled':''}>Next →</button>`;
+    pg += `<span style="color:var(--muted2);margin-left:8px">Page ${page} of ${totalPages}</span>`;
+  }
+  document.getElementById('moviePagination').innerHTML = pg;
+}
+
+let movieFilterTimer;
+function filterMovies() {
+  clearTimeout(movieFilterTimer);
+  movieFilterTimer = setTimeout(() => loadMovies(1), 300);
+}
+
+// ── Watchlist ─────────────────────────────────────────────────────
+async function loadWatchlist() {
+  const tbody = document.getElementById('watchlistBody');
+  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted2)">Loading...</td></tr>`;
+  try {
+    const items = await fetch('/api/watchlist').then(r=>r.json());
+    if(items.error) throw new Error(items.error);
+    if(!items.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted2)">Watchlist is empty</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(m => `
+      <tr>
+        <td><strong>${m.title}</strong></td>
+        <td style="color:var(--muted2)">${m.year||'—'}</td>
+        <td style="color:var(--muted2)">${m.added||'—'}</td>
+        <td>${m.imdb ? `<a href="https://imdb.com/title/${m.imdb}" target="_blank" style="color:var(--accent);text-decoration:none">${m.imdb}</a>` : '—'}</td>
+      </tr>`).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--error)">${e.message}</td></tr>`;
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────
+async function loadHistory() {
+  const runs = await fetch('/api/history').then(r=>r.json());
+  const el = document.getElementById('historyList');
+  if(!runs.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">No sync runs yet</div></div>';
+    return;
+  }
+  el.innerHTML = runs.map(r => `
+    <div class="history-item">
+      <div class="history-run">#${r.run}</div>
+      <div class="history-info">
+        <div style="font-size:12px;font-weight:500">${r.time}</div>
+        <div class="history-stats">
+          <span class="history-badge hb-success">✓ ${r.count} films</span>
+          <span class="history-badge hb-mode">${r.mode}</span>
+          <span style="color:var(--muted2)">${r.duration}s</span>
+          ${r.imported ? `<span class="history-badge hb-success">↑ ${r.imported} imported</span>` : ''}
+        </div>
+      </div>
+      <span style="color:var(--success);font-size:11px">${r.status}</span>
+    </div>`).join('');
+}
+
+// ── Search ────────────────────────────────────────────────────────
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  const q = document.getElementById('globalSearch').value.trim();
+  if(q.length < 2) { document.getElementById('searchResults').classList.remove('show'); return; }
+  searchTimer = setTimeout(() => doSearch(q), 400);
+}
+
+async function doSearch(q) {
+  const results = await fetch(`/api/search?q=${encodeURIComponent(q)}`).then(r=>r.json());
+  const el = document.getElementById('searchResults');
+  if(!results.length) { el.classList.remove('show'); return; }
+  el.innerHTML = results.map(m => `
+    <div class="search-result-item" onclick="showSearchDetail(${JSON.stringify(m).replace(/"/g,'&quot;')})">
+      <div>
+        <div class="result-title">${m.title}</div>
+        <div style="display:flex;gap:10px;margin-top:3px">
+          <span class="result-year">${m.year||''}</span>
+          <span class="result-imdb">${m.imdb||''}</span>
+        </div>
+      </div>
+    </div>`).join('');
+  el.classList.add('show');
+}
+
+function showSearchDetail(m) {
+  document.getElementById('searchResults').classList.remove('show');
+  const el = document.getElementById('searchDetail');
+  el.style.display = 'block';
+  document.getElementById('searchDetailContent').innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div style="flex:1">
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;margin-bottom:4px">${m.title}</div>
+        <div style="font-size:12px;color:var(--muted2);margin-bottom:16px">${m.year||''} ${m.imdb ? `• <a href="https://imdb.com/title/${m.imdb}" target="_blank" style="color:var(--accent)">${m.imdb}</a>` : ''}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${m.imdb ? `<a href="https://www.imdb.com/title/${m.imdb}" target="_blank" class="btn btn-ghost" style="text-decoration:none;font-size:11px">IMDb →</a>` : ''}
+          ${m.imdb ? `<a href="https://letterboxd.com/search/${encodeURIComponent(m.title)}/" target="_blank" class="btn btn-lb" style="text-decoration:none;font-size:11px">View on Letterboxd →</a>` : ''}
+          <a href="https://trakt.tv/search?query=${encodeURIComponent(m.title)}" target="_blank" class="btn btn-ghost" style="text-decoration:none;font-size:11px;color:var(--trakt)">View on Trakt →</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+document.addEventListener('click', e => {
+  if(!e.target.closest('.search-wrap')) document.getElementById('searchResults').classList.remove('show');
+});
+
+// ── Files ─────────────────────────────────────────────────────────
+async function loadFiles() {
+  const s = await fetch('/api/status').then(r=>r.json());
+  const el = document.getElementById('fileList');
+  if(!s.outputs.length) { el.innerHTML = '<div style="color:var(--muted2);font-size:12px">No files yet — run a sync first.</div>'; return; }
+  el.innerHTML = s.outputs.map(f => `
+    <div class="file-item">
+      <span>📄</span>
+      <span class="file-name">${f}</span>
+      ${f.includes('latest') ? '<span class="file-tag latest">LATEST</span>' : ''}
+      <a href="/api/download/${f}" class="btn btn-ghost" style="padding:5px 12px;font-size:11px;text-decoration:none">⬇ Download</a>
+    </div>`).join('');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+(async function init() {
+  const s = await fetch('/api/status').then(r=>r.json());
+  updateStatus(s);
+  const avatarName = document.getElementById('avatarName');
+  const avatarLetter = document.getElementById('avatarLetter');
+  const cfg = await fetch('/api/config').then(r=>r.json());
+  if(cfg.ui_username) {
+    avatarName.textContent = cfg.ui_username;
+    avatarLetter.textContent = cfg.ui_username[0].toUpperCase();
+  }
+  const logs = await fetch('/api/logs').then(r=>r.json());
+  renderLogs(logs); logIndex = logs.length;
+  setInterval(pollLogs, 1500);
+  setInterval(async () => { const s = await fetch('/api/status').then(r=>r.json()); updateStatus(s); }, 3000);
+})();
+</script>
+</body>
+</html>

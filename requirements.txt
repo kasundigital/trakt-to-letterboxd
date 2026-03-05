@@ -1,0 +1,5 @@
+flask>=3.0.0
+requests>=2.31.0
+schedule>=1.2.1
+playwright>=1.44.0
+curl-cffi>=0.7.3

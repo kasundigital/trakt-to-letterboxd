@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trakt Sync — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#07070f;--s1:#0e0e1c;--border:#1e1e35;--accent:#5b5ef4;--text:#e2e2f0;--muted:#5a5a78;--trakt:#ed1c24;--lb:#00c030}
+body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:40px 40px;opacity:0.3;pointer-events:none}
+.glow{position:fixed;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(91,94,244,0.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:20px;padding:48px;width:420px;position:relative;z-index:1;animation:fadeUp 0.4s ease}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:32px;justify-content:center}
+.logo-badges{display:flex;gap:6px}
+.badge{padding:3px 10px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}
+.badge-trakt{background:var(--trakt);color:#fff}
+.badge-lb{background:var(--lb);color:#000}
+.logo-arrow{color:var(--muted);font-size:16px}
+h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;text-align:center;margin-bottom:6px}
+.sub{font-size:11px;color:var(--muted);text-align:center;margin-bottom:32px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.field input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;transition:border-color 0.15s}
+.field input:focus{border-color:var(--accent)}
+.btn{width:100%;padding:13px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;margin-top:8px}
+.btn:hover{background:#4a4de0;transform:translateY(-1px)}
+.error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 14px;font-size:11px;color:#ef4444;margin-top:14px;display:none}
+.error.show{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="glow"></div>
+<div class="card">
+  <div class="logo">
+    <div class="logo-badges">
+      <span class="badge badge-trakt">TRAKT</span>
+      <span class="logo-arrow">→</span>
+      <span class="badge badge-lb">LBD</span>
+    </div>
+  </div>
+  <h1>Welcome Back</h1>
+  <p class="sub">Sign in to your sync dashboard</p>
+  <div class="field">
+    <label>Username</label>
+    <input type="text" id="user" placeholder="admin" autocomplete="username">
+  </div>
+  <div class="field">
+    <label>Password</label>
+    <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password">
+  </div>
+  <button class="btn" onclick="doLogin()">Sign In →</button>
+  <div class="error" id="err">Invalid username or password</div>
+</div>
+<script>
+document.addEventListener('keydown', e => { if(e.key==='Enter') doLogin() })
+async function doLogin() {
+  const btn = document.querySelector('.btn')
+  btn.textContent = 'Signing in...'
+  const r = await fetch('/login', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username: document.getElementById('user').value, password: document.getElementById('pass').value})
+  })
+  if(r.ok) { window.location = '/' }
+  else {
+    document.getElementById('err').classList.add('show')
+    btn.textContent = 'Sign In →'
+  }
+}
+</script>
+</body>
+</html>

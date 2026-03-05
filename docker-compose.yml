@@ -1,0 +1,13 @@
+services:
+  trakt-sync:
+    build: .
+    container_name: trakt-to-letterboxd
+    ports:
+      - "${PORT:-8888}:8888"
+    volumes:
+      - ./output:/app/output
+      - ./logs:/app/logs
+    environment:
+      - PORT=8888
+      - SECRET_KEY=${SECRET_KEY:-changeme_generate_a_random_string}
+    restart: unless-stopped
