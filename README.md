@@ -30,7 +30,7 @@
 ### Option A — Python (recommended for Linux/Mac)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/trakt-to-letterboxd
+git clone https://github.com/kasundigital/trakt-to-letterboxd
 cd trakt-to-letterboxd
 ./run.sh
 ```
@@ -40,7 +40,7 @@ Open **http://localhost:8888** — the setup wizard will guide you through every
 ### Option B — Docker
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/trakt-to-letterboxd
+git clone https://github.com/kasundigital/trakt-to-letterboxd
 cd trakt-to-letterboxd
 docker compose up -d
 ```
